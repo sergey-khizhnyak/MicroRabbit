@@ -28,15 +28,13 @@ namespace MicroRabbit.Infra.Bus
         public void Publish<T>(T @event) where T : Event
         {
             var factory = new ConnectionFactory() { HostName = "localhost" };
-            using (var connection = factory.CreateConnection())
-            using (var channel = connection.CreateModel())
-            {
-                var eventName = @event.GetType().Name;
-                channel.QueueDeclare(eventName, false, false, false, null);
-                var message = JsonConvert.SerializeObject(@event);
-                var body = Encoding.UTF8.GetBytes(message);
-                channel.BasicPublish("", eventName, null, body);
-            }
+            using var connection = factory.CreateConnection();
+            using var channel = connection.CreateModel();
+            var eventName = @event.GetType().Name;
+            channel.QueueDeclare(eventName, false, false, false, null);
+            var message = JsonConvert.SerializeObject(@event);
+            var body = Encoding.UTF8.GetBytes(message);
+            channel.BasicPublish("", eventName, null, body);
         }
 
         public Task SendCommand<T>(T command) where T : Command
@@ -61,9 +59,9 @@ namespace MicroRabbit.Infra.Bus
                 _handlers.Add(eventName, new List<Type>());
             }
 
-            if (_handlers[eventName].Any(s => s.GetType() == handlerType))
+            if (_handlers[eventName].Any(s => s == handlerType))
             {
-                throw new ArgumentException($"Hanlder Type {handlerType.Name} already registered for {eventName}");
+                throw new ArgumentException($"Handler Type {handlerType.Name} already registered for {eventName}");
             }
 
             _handlers[eventName].Add(handlerType);
@@ -93,7 +91,7 @@ namespace MicroRabbit.Infra.Bus
 
             try
             {
-                await ProcessEvent(eventName, message);
+                await ProcessEvent(eventName, message).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -117,7 +115,7 @@ namespace MicroRabbit.Infra.Bus
                     }
                     var eventType = _eventTypes.SingleOrDefault(t => t.Name == eventName);
                     var @event = JsonConvert.DeserializeObject(message, eventType);
-                    var concreteType = typeof(IEventHandler).MakeGenericType(eventType);
+                    var concreteType = typeof(IEventHandler<>).MakeGenericType(eventType);
 
                     await (Task)concreteType.GetMethod("Handle").Invoke(handler, new[] { @event });
                 }

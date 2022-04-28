@@ -10,7 +10,7 @@ namespace MicroRabbit.Domain.Core.Events
     {
         public DateTime Timestamp { get; protected set; }
 
-        public Event()
+        protected Event()
         {
             Timestamp = DateTime.Now;
         }
